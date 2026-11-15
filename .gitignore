@@ -1,0 +1,14 @@
+# OS & System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor & Tooling
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Antigravity & Agent Scratch Files
+.gemini/
+

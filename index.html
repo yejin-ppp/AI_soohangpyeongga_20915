@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2026 고2 수학 모의고사 오답 개념진단 클리닉 (2022 개정 교육과정)</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone CDN -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- KaTeX for Math Rendering (동기 로드로 안정적인 수식 렌더링 보장) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+  <!-- Google Fonts: Pretendard / Noto Sans KR -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap"
+    rel="stylesheet">
+
+  <!-- 45개 전체 문항 2022 개정 교육과정 진단 데이터베이스 -->
+  <script src="diagnosticData.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', 'Noto Sans KR', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #f1f5f9 100%);
+      min-height: 100vh;
+    }
+
+    .math-font {
+      font-family: 'KaTeX_Math', 'Times New Roman', serif;
+    }
+
+    @media print {
+      body {
+        background: #ffffff !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
+      .report-card {
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+    }
+
+    .print-only {
+      display: none;
+    }
+  </style>
+</head>
+
+<body class="text-slate-800 antialiased selection:bg-brand-500 selection:text-white">
+  <div id="root"></div>
+
+  <!-- React Code with Babel -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // =========================================================================
+    // 안전한 KaTeX 수식 HTML 변환 함수 (DOM 간섭으로 인한 React 가상돔 충돌 방지)
+    // =========================================================================
+    function formatMathHtml(text) {
+      if (!text) return "";
+      if (typeof text !== "string") return String(text);
+
+      if (window.katex && window.katex.renderToString) {
+        try {
+          // 1) 블록 수식 $$...$$ 변환
+          let rendered = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+            try {
+              return window.katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+            } catch (e) {
+              return `$$${math}$$`;
+            }
+          });
+
+          // 2) 인라인 수식 $...$ 변환
+          rendered = rendered.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
+            try {
+              return window.katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+            } catch (e) {
+              return `$${math}$`;
+            }
+          });
+
+          // 3) 줄바꿈 문자 <br/> 치환
+          return rendered.replace(/\n/g, '<br/>');
+        } catch (err) {
+          console.warn("KaTeX format warning:", err);
+        }
+      }
+
+      // KaTeX 미로딩 시 줄바꿈만 치환하여 반환
+      return text.replace(/\n/g, '<br/>');
+    }
+
+    // React Fiber의 자식 노드 충돌을 원천 차단하는 전용 수식 뷰 컴포넌트
+    function MathText({ text, className = "", as = "span" }) {
+      const Component = as;
+      const htmlContent = useMemo(() => formatMathHtml(text), [text]);
+      return (
+        <Component
+          className={className}
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+        />
+      );
+    }
+
+    // =========================================================================
+    // 데이터베이스 바인딩
+    // =========================================================================
+    const DB = window.DIAGNOSTIC_DB || {};
+    const EXAM_OPTIONS = window.ALL_EXAM_OPTIONS || [];
+
+    // =========================================================================
+    // 메인 App 컴포넌트
+    // =========================================================================
+    function App() {
+      // 선택 상태: 기본값 9월 30번 (오답률 1위 킬러 문항)
+      const [selectedMonth, setSelectedMonth] = useState("9");
+      const [selectedQNum, setSelectedQNum] = useState(30);
+
+      // 진단 진행 상태
+      const [currentStepIndex, setCurrentStepIndex] = useState(0); // 0: Q1, 1: Q2, 2: Q3, 3: Q4
+      const [diagnosisResult, setDiagnosisResult] = useState(null); // null | 'FAILED_STEP' | 'ALL_PASS'
+      const [failedStepData, setFailedStepData] = useState(null);
+      const [userAnswersHistory, setUserAnswersHistory] = useState([]); // [{ qNum, answer, questionText, step }]
+
+      // 탭: 'diagnostic' (진단실) | 'top15' (Top 15 전체 맵) | 'curriculum' (2022 개정 성취기준표)
+      const [activeTab, setActiveTab] = useState("diagnostic");
+
+      // 현재 선택된 문항 데이터
+      const currentItemKey = `${selectedMonth}-${selectedQNum}`;
+      const currentItem = DB[currentItemKey];
+
+      // 진단 상태 초기화 함수
+      const resetDiagnosis = () => {
+        setCurrentStepIndex(0);
+        setDiagnosisResult(null);
+        setFailedStepData(null);
+        setUserAnswersHistory([]);
+      };
+
+      // 모의고사 회차 변경
+      const handleMonthChange = (e) => {
+        const newMonth = e.target.value;
+        setSelectedMonth(newMonth);
+        const group = EXAM_OPTIONS.find(m => m.month === newMonth);
+        if (group && group.questions.length > 0) {
+          setSelectedQNum(group.questions[0].qNum);
+        }
+        resetDiagnosis();
+      };
+
+      // 문항 번호 변경
+      const handleQNumChange = (e) => {
+        setSelectedQNum(Number(e.target.value));
+        resetDiagnosis();
+      };
+
+      // 학생의 '예' 클릭: 다음 질문으로 즉시 전진 (마지막 질문이면 ALL_PASS)
+      const handleAnswerYes = () => {
+        if (!currentItem || !currentItem.steps) return;
+        const currentStep = currentItem.steps[currentStepIndex];
+
+        const newHistory = [
+          ...userAnswersHistory,
+          {
+            stepIndex: currentStepIndex + 1,
+            qNum: currentStep.qNum,
+            answer: 'YES',
+            questionText: currentStep.question,
+            step: currentStep
+          }
+        ];
+        setUserAnswersHistory(newHistory);
+
+        // 다음 질문 단계가 남아있는가?
+        if (currentStepIndex + 1 < currentItem.steps.length) {
+          setCurrentStepIndex(prev => prev + 1);
+        } else {
+          // 모든 질문을 '예'로 통과한 경우
+          setDiagnosisResult("ALL_PASS");
+        }
+      };
+
+      // 학생의 '아니오' 클릭: 즉시 진단 종료 & 1:1 매핑 성취기준 결과 리포트 출력
+      const handleAnswerNo = () => {
+        if (!currentItem || !currentItem.steps) return;
+        const currentStep = currentItem.steps[currentStepIndex];
+
+        const newHistory = [
+          ...userAnswersHistory,
+          {
+            stepIndex: currentStepIndex + 1,
+            qNum: currentStep.qNum,
+            answer: 'NO',
+            questionText: currentStep.question,
+            step: currentStep
+          }
+        ];
+        setUserAnswersHistory(newHistory);
+        setFailedStepData(currentStep);
+        setDiagnosisResult("FAILED_STEP");
+      };
+
+      // 인쇄 / PDF 저장 기능
+      const handlePrint = () => {
+        window.print();
+      };
+
+      const currentExamInfo = EXAM_OPTIONS.find(m => m.month === selectedMonth);
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Header */}
+          <header className="bg-white/95 backdrop-blur-md border-b border-indigo-100 sticky top-0 z-50 shadow-xs no-print">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-brand-500/20 font-black text-xl">
+                  ∑
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 tracking-wide uppercase">
+                      2022 개정 수학과 교육과정
+                    </span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                      고2 모의고사 1:1 오답 클리닉
+                    </span>
+                  </div>
+                  <h1 className="text-lg md:text-xl font-extrabold text-slate-900 tracking-tight">
+                    수학 오답 개념진단 & 학습 처방 엔진
+                  </h1>
+                </div>
+              </div>
+
+              {/* Navigation Tabs */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600">
+                <button
+                  onClick={() => setActiveTab("diagnostic")}
+                  className={`px-3.5 py-1.5 rounded-lg transition-all ${activeTab === "diagnostic"
+                      ? "bg-white text-brand-700 shadow-xs font-extrabold"
+                      : "hover:text-slate-900"
+                    }`}
+                >
+                  🎯 맞춤 진단실
+                </button>
+                <button
+                  onClick={() => setActiveTab("top15")}
+                  className={`px-3.5 py-1.5 rounded-lg transition-all ${activeTab === "top15"
+                      ? "bg-white text-brand-700 shadow-xs font-extrabold"
+                      : "hover:text-slate-900"
+                    }`}
+                >
+                  📊 Top 15 전체 맵 (45문항)
+                </button>
+                <button
+                  onClick={() => setActiveTab("curriculum")}
+                  className={`px-3.5 py-1.5 rounded-lg transition-all ${activeTab === "curriculum"
+                      ? "bg-white text-brand-700 shadow-xs font-extrabold"
+                      : "hover:text-slate-900"
+                    }`}
+                >
+                  📚 2022 개정 성취기준표
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Container */}
+          <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 md:py-8">
+            {/* TAB 1: 맞춤 진단실 */}
+            {activeTab === "diagnostic" && (
+              <div className="space-y-6">
+                {/* 1. 문항 선택 컨트롤 패널 */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200/90 p-5 md:p-6 no-print">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse"></span>
+                        1단계: 진단할 모의고사 회차 및 오답 문항 선택
+                      </h2>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                        오답률 상위 15위(총 45문항) 중 진단할 문항을 고르면 해설지 논리 기반의 단계별 질문(Q1~Q4)이 제시됩니다.
+                      </p>
+                    </div>
+
+                    {/* 회차 및 문항 셀렉터 */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">모의고사 회차</label>
+                        <select
+                          value={selectedMonth}
+                          onChange={handleMonthChange}
+                          className="bg-slate-50 border border-slate-300 text-slate-800 text-sm font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none cursor-pointer"
+                        >
+                          <option value="9">2026학년도 9월 (대수·미적Ⅰ)</option>
+                          <option value="3">2026학년도 3월 (공통수학1·2)</option>
+                          <option value="6">2026학년도 6월 (대수 전범위)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 mb-1">오답률 순위 및 문항 번호</label>
+                        <select
+                          value={selectedQNum}
+                          onChange={handleQNumChange}
+                          className="bg-slate-50 border border-slate-300 text-slate-800 text-sm font-bold rounded-xl px-3 py-2 focus:ring-2 focus:ring-brand-500 focus:outline-none cursor-pointer max-w-[280px]"
+                        >
+                          {currentExamInfo?.questions.map((q, idx) => (
+                            <option key={q.qNum} value={q.qNum}>
+                              Top {idx + 1}위: {q.title} [오답률 {q.errorRate}]
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 선택된 문항 메타정보 배너 */}
+                  {currentItem ? (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs md:text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold">
+                          {currentItem.subject} &gt; {currentItem.curriculumDomain}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 font-bold">
+                          {currentItem.difficulty}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 font-semibold">
+                          배점: {currentItem.score}점
+                        </span>
+                        <span className="text-slate-600 font-medium ml-1">
+                          주제: <strong className="text-slate-800">{currentItem.topicTitle}</strong>
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 font-medium">
+                        총 <strong className="text-brand-600">{currentItem.steps.length}단계</strong> 진단 인터뷰 질문
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                      선택하신 문항 데이터를 불러오는 중입니다.
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. 인터랙티브 진단 영역 (질문 진행 중 or 최종 리포트 카드) */}
+                {currentItem && (
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden report-card">
+                    {/* 상단 프로그레스 바 */}
+                    <div className="bg-slate-50/90 px-6 py-4 border-b border-slate-100 no-print">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-500 mb-2">
+                        <span className="flex items-center gap-1.5 text-brand-700">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          해설지 풀이 알고리즘 기반 단계별 진단
+                        </span>
+                        <span>
+                          {diagnosisResult === null ? (
+                            `진행 중: ${currentStepIndex + 1}단계 / 총 ${currentItem.steps.length}단계`
+                          ) : (
+                            <strong className="text-brand-600">진단 완료</strong>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Progress Track */}
+                      <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 rounded-full ${diagnosisResult === "FAILED_STEP"
+                              ? "bg-rose-500"
+                              : diagnosisResult === "ALL_PASS"
+                                ? "bg-emerald-500"
+                                : "bg-brand-600"
+                            }`}
+                          style={{
+                            width:
+                              diagnosisResult === "FAILED_STEP"
+                                ? `${((currentStepIndex + 1) / currentItem.steps.length) * 100}%`
+                                : diagnosisResult === "ALL_PASS"
+                                  ? "100%"
+                                  : `${((currentStepIndex) / currentItem.steps.length) * 100}%`
+                          }}
+                        ></div>
+                      </div>
+
+                      {/* Step Indicator Badges */}
+                      <div className="flex items-center justify-between mt-3 text-xs">
+                        {currentItem.steps.map((st, idx) => {
+                          let badgeClass = "bg-slate-100 text-slate-400 border-slate-200";
+                          let label = st.qNum;
+
+                          if (idx < currentStepIndex) {
+                            badgeClass = "bg-emerald-100 text-emerald-700 border-emerald-300 font-bold";
+                            label += " 통과 ✓";
+                          } else if (idx === currentStepIndex && diagnosisResult === null) {
+                            badgeClass = "bg-brand-600 text-white border-brand-700 font-extrabold shadow-sm scale-105";
+                            label += " 현재 질문";
+                          } else if (idx === currentStepIndex && diagnosisResult === "FAILED_STEP") {
+                            badgeClass = "bg-rose-500 text-white border-rose-600 font-extrabold shadow-sm";
+                            label += " 결손 발견 ✕";
+                          } else if (diagnosisResult === "ALL_PASS") {
+                            badgeClass = "bg-emerald-100 text-emerald-700 border-emerald-300 font-bold";
+                            label += " 통과 ✓";
+                          }
+
+                          return (
+                            <span
+                              key={st.qNum}
+                              className={`px-3 py-1 rounded-full border text-[11px] transition-all ${badgeClass}`}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 진단 본문 카드 */}
+                    <div className="p-6 md:p-8">
+                      {/* ======================================================= */}
+                      {/* 상태 1: 질문 진행 중 (diagnosisResult === null) */}
+                      {/* ======================================================= */}
+                      {diagnosisResult === null && currentItem.steps[currentStepIndex] && (
+                        <div className="space-y-6">
+                          {/* 문항 요약 안내 */}
+                          <div className="bg-brand-50/70 border border-brand-100 rounded-xl p-4 flex items-start gap-3">
+                            <span className="text-xl">💡</span>
+                            <div className="text-xs md:text-sm text-slate-700 leading-relaxed">
+                              <strong className="text-brand-900 font-bold">문항 핵심 상황:</strong>{" "}
+                              <MathText text={currentItem.questionSummary} />
+                            </div>
+                          </div>
+
+                          {/* 현재 질문 박스 */}
+                          <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-6 md:p-8 text-center space-y-4 shadow-xs transition-all">
+                            <div className="inline-block px-3 py-1 rounded-md bg-brand-600 text-white text-xs font-black tracking-wider uppercase">
+                              진단 질문 {currentItem.steps[currentStepIndex].qNum} (Step {currentStepIndex + 1})
+                            </div>
+
+                            <div className="text-lg md:text-2xl font-extrabold text-slate-900 leading-snug px-2 max-w-4xl mx-auto">
+                              "<MathText text={currentItem.steps[currentStepIndex].question} />"
+                            </div>
+
+                            <p className="text-xs md:text-sm text-slate-500 font-medium">
+                              풀이 과정 중 위 단계의 수학적 개념과 성질을 스스로 적용하고 해결할 수 있었나요?
+                            </p>
+                          </div>
+
+                          {/* 예 / 아니오 선택 버튼 UI */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                            {/* 예 버튼 */}
+                            <button
+                              type="button"
+                              onClick={handleAnswerYes}
+                              className="group relative flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-base md:text-lg shadow-lg shadow-emerald-500/25 hover:from-emerald-600 hover:to-teal-700 hover:shadow-xl hover:shadow-emerald-500/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                            >
+                              <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-base font-black">
+                                ✓
+                              </span>
+                              예 (이해했고 해결할 수 있습니다)
+                            </button>
+
+                            {/* 아니오 버튼 */}
+                            <button
+                              type="button"
+                              onClick={handleAnswerNo}
+                              className="group relative flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 text-white font-extrabold text-base md:text-lg shadow-lg shadow-rose-500/25 hover:from-rose-600 hover:to-pink-700 hover:shadow-xl hover:shadow-rose-500/35 transition-all transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                            >
+                              <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-base font-black">
+                                ✕
+                              </span>
+                              아니오 (여기서 막히거나 헷갈립니다)
+                            </button>
+                          </div>
+
+                          <div className="text-center text-xs text-slate-400 font-medium">
+                            ※ '예'를 누르면 다음 사고 단계(Step)로 넘어가며, '아니오'를 누르면 즉시 진단이 종료되고 2022 개정 성취기준 맞춤 리포트가 생성됩니다.
+                          </div>
+
+                          {/* 이전 단계 답변 히스토리 미리보기 */}
+                          {userAnswersHistory.length > 0 && (
+                            <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-500">
+                              <span className="font-bold">진단 진행 기록:</span>
+                              {userAnswersHistory.map((ans, idx) => (
+                                <span key={idx} className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                                  {ans.qNum} 통과 ✓
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ======================================================= */}
+                      {/* 상태 2: 최종 진단 리포트 (개념 결손 발견: FAILED_STEP) */}
+                      {/* ======================================================= */}
+                      {diagnosisResult === "FAILED_STEP" && failedStepData && (
+                        <div className="space-y-6">
+                          {/* 인쇄용 전용 헤더 */}
+                          <div className="print-only pb-4 border-b border-slate-300">
+                            <h2 className="text-xl font-black text-slate-900">
+                              2022 개정 수학과 교육과정 기반 오답 개념진단 결과표
+                            </h2>
+                            <p className="text-xs text-slate-600 mt-1">
+                              모의고사: {currentItem.examMonthName} {currentItem.questionNumber}번 | 소속: {currentItem.subject}
+                            </p>
+                          </div>
+
+                          {/* 리포트 상단 요약 배너 */}
+                          <div className="bg-gradient-to-r from-rose-50 via-orange-50 to-amber-50 border-2 border-rose-300 rounded-2xl p-6 shadow-sm">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex items-start md:items-center space-x-4">
+                                <div className="w-14 h-14 rounded-2xl bg-rose-500 text-white flex items-center justify-center text-2xl font-black shadow-md shadow-rose-500/30 flex-shrink-0">
+                                  !
+                                </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="px-2.5 py-0.5 rounded-md bg-rose-600 text-white text-xs font-black uppercase">
+                                      막힌 단계: {failedStepData.qNum} (Step {failedStepData.stepIndex})
+                                    </span>
+                                    <span className="text-xs font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded">
+                                      개념 결손 지점 포착
+                                    </span>
+                                    <span className="text-xs text-slate-500">
+                                      {currentItem.examMonthName} {currentItem.questionNumber}번 ({currentItem.difficulty})
+                                    </span>
+                                  </div>
+                                  <h3 className="text-xl md:text-2xl font-black text-slate-900 mt-1">
+                                    {failedStepData.deficiencyTitle}
+                                  </h3>
+                                </div>
+                              </div>
+
+                              {/* 액션 버튼들 */}
+                              <div className="flex items-center gap-2 no-print">
+                                <button
+                                  type="button"
+                                  onClick={handlePrint}
+                                  className="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                  title="리포트를 인쇄하거나 PDF로 저장합니다"
+                                >
+                                  🖨️ 리포트 인쇄/저장
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={resetDiagnosis}
+                                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
+                                >
+                                  ↺ 다시 진단하기
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 1. 오답 문항 요약 카드 */}
+                          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                            <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                              <span>📋</span> 오답 문항 요약 (Question Overview)
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-3">
+                              <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                                <span className="text-slate-400 block text-[10px]">모의고사 회차</span>
+                                <strong className="text-slate-800 text-sm">{currentItem.examMonthName}</strong>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                                <span className="text-slate-400 block text-[10px]">문항 번호 / 배점</span>
+                                <strong className="text-slate-800 text-sm">{currentItem.questionNumber}번 ({currentItem.score}점)</strong>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                                <span className="text-slate-400 block text-[10px]">과목 및 단원</span>
+                                <strong className="text-slate-800 text-sm">{currentItem.subject} &gt; {currentItem.curriculumDomain}</strong>
+                              </div>
+                              <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                                <span className="text-slate-400 block text-[10px]">오답률 순위</span>
+                                <strong className="text-rose-600 text-sm">{currentItem.difficulty}</strong>
+                              </div>
+                            </div>
+                            <div className="text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200 leading-relaxed">
+                              <strong className="text-slate-800 font-bold">문항 핵심 상황:</strong>{" "}
+                              <MathText text={currentItem.questionSummary} />
+                            </div>
+                          </div>
+
+                          {/* 2. 막힌 풀이 단계 질문 내용 */}
+                          <div className="bg-rose-50/60 border border-rose-200 rounded-2xl p-5">
+                            <h4 className="text-xs font-extrabold text-rose-800 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                              <span>🛑</span> 막힌 풀이 단계 질문 (Blocked Step Question)
+                            </h4>
+                            <p className="text-xs text-rose-600 mb-2 font-medium">
+                              학생이 '아니오'를 선택하여 해결하지 못한 해설지 핵심 사고 단계입니다:
+                            </p>
+                            <div className="bg-white p-4 rounded-xl border border-rose-200 text-sm md:text-base font-bold text-slate-800 leading-snug">
+                              "<MathText text={failedStepData.question} />"
+                            </div>
+                          </div>
+
+                          {/* 3. 2022 개정 교육과정 성취기준 및 학습 처방전 상세 그리드 */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* 성취기준 코드 카드 */}
+                            <div className="md:col-span-1 bg-gradient-to-br from-indigo-900 via-brand-900 to-slate-900 text-white rounded-2xl p-6 shadow-md flex flex-col justify-between">
+                              <div>
+                                <span className="inline-block px-2.5 py-1 rounded-md bg-indigo-800 text-indigo-200 text-[11px] font-extrabold uppercase tracking-wider mb-3">
+                                  2022 개정 수학과 성취기준
+                                </span>
+                                <div className="text-2xl font-black font-mono tracking-tight text-amber-300">
+                                  {failedStepData.conceptCode}
+                                </div>
+                                <h4 className="text-base md:text-lg font-bold text-white mt-2 leading-snug">
+                                  {failedStepData.conceptName}
+                                </h4>
+                                <div className="mt-3 text-xs text-indigo-200 font-medium">
+                                  교과 영역: <strong>{failedStepData.curriculumSubject}</strong>
+                                </div>
+                              </div>
+
+                              <div className="mt-6 pt-4 border-t border-indigo-700/60">
+                                <span className="text-[11px] text-indigo-300 block mb-1.5 font-bold">복습 필수 키워드 태그:</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {failedStepData.coreKeywords.map(kw => (
+                                    <span key={kw} className="text-[11px] bg-indigo-800/90 text-indigo-100 px-2.5 py-0.5 rounded-full font-semibold border border-indigo-600/50">
+                                      #{kw}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 부족한 핵심 개념 설명 및 맞춤형 처방전 */}
+                            <div className="md:col-span-2 space-y-4">
+                              <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                                <h4 className="text-xs font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1.5">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  부족한 핵심 개념 정밀 분석 (Concept Deficiency)
+                                </h4>
+                                <div className="text-sm text-slate-700 leading-relaxed mt-2 font-medium">
+                                  <MathText text={failedStepData.deficiencyDesc} />
+                                </div>
+                              </div>
+
+                              <div className="bg-emerald-50/80 rounded-2xl p-5 border border-emerald-200">
+                                <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                                    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                                  </svg>
+                                  맞춤형 클리닉 처방전 및 복습 액션 플랜 (Remedial Action Plan)
+                                </h4>
+                                <div className="text-xs md:text-sm text-emerald-950 whitespace-pre-line leading-relaxed mt-2 font-medium">
+                                  <MathText text={failedStepData.prescription} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 4. 단계별 진단 인터뷰 로그 히스토리 */}
+                          <div className="bg-white rounded-xl p-4 border border-slate-200 text-xs">
+                            <span className="font-bold text-slate-700 block mb-2">학생 진단 인터뷰 상세 로그:</span>
+                            <div className="space-y-2">
+                              {userAnswersHistory.map((ans, idx) => (
+                                <div key={idx} className="flex items-start gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                  <span className={`px-2 py-0.5 rounded font-bold text-[11px] flex-shrink-0 ${ans.answer === 'YES' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                    }`}>
+                                    {ans.qNum}: {ans.answer === 'YES' ? '예 (통과)' : '아니오 (결손)'}
+                                  </span>
+                                  <span className="text-slate-600 text-xs">
+                                    <MathText text={ans.questionText} />
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 하단 리셋 및 다른 문항 진단 버튼 */}
+                          <div className="pt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 no-print">
+                            <div className="text-xs text-slate-500">
+                              위 학습 처방전을 바탕으로 해당 성취기준 교과서 예제와 기출 변형 문제를 복습하세요.
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={resetDiagnosis}
+                                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                              >
+                                이 문항 다시 진단하기
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  resetDiagnosis();
+                                  // 다음 문항 번호로 자동 이동 추천
+                                  const qList = currentExamInfo?.questions || [];
+                                  const currentIdx = qList.findIndex(q => q.qNum === selectedQNum);
+                                  if (currentIdx !== -1 && currentIdx + 1 < qList.length) {
+                                    setSelectedQNum(qList[currentIdx + 1].qNum);
+                                  }
+                                }}
+                                className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all cursor-pointer"
+                              >
+                                다른 문항 진단하기 →
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ======================================================= */}
+                      {/* 상태 3: 전 단계 통과 리포트 (개념 결손 없음: ALL_PASS) */}
+                      {/* ======================================================= */}
+                      {diagnosisResult === "ALL_PASS" && (
+                        <div className="space-y-6 text-center py-6">
+                          <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center text-4xl shadow-xl shadow-emerald-500/30">
+                            🎉
+                          </div>
+
+                          <div className="max-w-xl mx-auto space-y-2">
+                            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase">
+                              진단 완료: 모든 질문(Q1~Q{currentItem.steps.length}) '예' 통과
+                            </span>
+                            <h3 className="text-2xl md:text-3xl font-black text-slate-900">
+                              "개념 결손 없음 (계산 실수 또는 시간 부족 유형)"
+                            </h3>
+                            <p className="text-sm text-slate-600 leading-relaxed pt-2">
+                              축하합니다! 이 문항을 해결하는 데 필요한 <strong>2022 개정 수학과 교육과정 핵심 성취기준 개념</strong>과 단계별 논리 추론을 모두 갖추고 있습니다.
+                            </p>
+                          </div>
+
+                          {/* 상세 처방 */}
+                          <div className="max-w-2xl mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-6 text-left space-y-3">
+                            <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                              실전 피드백 및 고득점 도약 처방전
+                            </h4>
+                            <ul className="text-xs md:text-sm text-slate-600 space-y-2.5 leading-relaxed">
+                              <li className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold">•</span>
+                                <span><strong>타임 어택 훈련:</strong> 개념은 충분히 이해하고 있으나 시험장 제한 시간(100분) 안에서 문제 번호별 시간 배분(쉬운 4점 3~4분, 킬러 4점 8~10분) 전략이 흔들렸을 가능성이 높습니다.</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold">•</span>
+                                <span><strong>계산 실수 방지 루틴:</strong> 마지막 부등식 연립, 사칙연산, 대칭축 대입 과정에서 암산보다는 시험지 여백에 줄을 맞추어 정돈된 풀이 쓰기를 습관화하세요.</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-emerald-600 font-bold">•</span>
+                                <span><strong>기출 유사 변형 n제 정복:</strong> 이 문항과 동일한 성취기준을 갖는 고난도 기출 3개 문항을 연속으로 풀어보며 풀이 속도를 20% 단축해 보세요.</span>
+                              </li>
+                            </ul>
+                          </div>
+
+                          {/* 답변 로그 */}
+                          <div className="max-w-2xl mx-auto bg-white rounded-xl p-4 border border-slate-200 text-xs text-left">
+                            <span className="font-bold text-slate-700 block mb-2">진단 인터뷰 전체 통과 기록:</span>
+                            <div className="flex flex-wrap gap-2">
+                              {userAnswersHistory.map((ans, idx) => (
+                                <span key={idx} className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 font-bold">
+                                  {ans.qNum}: 예 (통과 ✓)
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="pt-2 flex items-center justify-center gap-3 no-print">
+                            <button
+                              type="button"
+                              onClick={handlePrint}
+                              className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                            >
+                              🖨️ 결과표 인쇄
+                            </button>
+                            <button
+                              type="button"
+                              onClick={resetDiagnosis}
+                              className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold rounded-xl shadow-md transition-all cursor-pointer"
+                            >
+                              다른 문항 진단하기
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: Top 15 전체 로드맵 (45문항 전체 그리드) */}
+            {activeTab === "top15" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/90">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-4 border-b border-slate-100 mb-6">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">
+                        2026 고2 3월·6월·9월 모의고사 오답률 Top 15 종합 분석 맵 (총 45문항)
+                      </h2>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                        원하는 문항을 클릭하면 2022 개정 수학과 교육과정 1:1 맞춤 진단실로 즉시 이동합니다.
+                      </p>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full bg-brand-100 text-brand-800 font-extrabold self-start md:self-auto">
+                      45문항 전체 진단 데이터 탑재 완료
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {EXAM_OPTIONS.map(exam => (
+                      <div key={exam.month} className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50/50 flex flex-col">
+                        <div className="bg-indigo-50/80 border-b border-indigo-100 px-4 py-3 font-bold text-indigo-950 text-sm flex items-center justify-between">
+                          <div>
+                            <span className="block text-slate-900 font-extrabold">{exam.monthName}</span>
+                            <span className="text-[11px] text-indigo-600 font-medium">{exam.curriculumScope}</span>
+                          </div>
+                          <span className="text-xs bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full font-bold">
+                            15개 문항
+                          </span>
+                        </div>
+                        <ul className="p-3 space-y-1.5 flex-1 overflow-y-auto text-xs">
+                          {exam.questions.map((q, idx) => (
+                            <li
+                              key={q.qNum}
+                              className="p-2.5 rounded-xl flex items-center justify-between transition-all bg-white border border-slate-200 hover:border-brand-500 hover:shadow-xs cursor-pointer group"
+                              onClick={() => {
+                                setSelectedMonth(exam.month);
+                                setSelectedQNum(q.qNum);
+                                setActiveTab("diagnostic");
+                                resetDiagnosis();
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ${idx < 3 ? "bg-rose-100 text-rose-700" : idx < 7 ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+                                  }`}>
+                                  {idx + 1}
+                                </span>
+                                <div>
+                                  <span className="font-bold text-slate-800 group-hover:text-brand-600 transition-colors">
+                                    {q.title}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 block">
+                                    배점: {q.score}점
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[11px] font-black text-rose-600 block">
+                                  {q.errorRate}
+                                </span>
+                                <span className="text-[9px] text-brand-600 font-bold group-hover:underline">
+                                  진단하기 →
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: 2022 개정 수학과 교육과정 성취기준표 안내 */}
+            {activeTab === "curriculum" && (
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/90">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-100 mb-6 gap-2">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">
+                        2022 개정 수학과 교육과정 성취기준 체계 (고2 연계 핵심)
+                      </h2>
+                      <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                        교육부 고시 제2022-33호 [별책 8] 수학과 교육과정 공통수학1·2, 대수, 미적분Ⅰ 성취기준 매핑 체계입니다.
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-brand-50 border border-brand-200 text-brand-700 text-xs font-bold self-start md:self-auto">
+                      교육부 고시 제2022-33호 표준
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                    {/* 공통수학1 & 공통수학2 */}
+                    <div className="space-y-4">
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold text-[10px]">공통 과목</span>
+                          <h3 className="font-extrabold text-slate-900 text-sm">공통수학1 [10공수1]</h3>
+                        </div>
+                        <ul className="space-y-2 text-slate-700">
+                          <li><strong>[10공수1-01-01]</strong> 다항식의 사칙연산과 곱셈 공식 변형</li>
+                          <li><strong>[10공수1-01-02]</strong> 나머지정리와 인수정리, 다항식의 인수분해</li>
+                          <li><strong>[10공수1-02-01]</strong> 복소수의 연산과 이차방정식 근과 계수의 관계</li>
+                          <li><strong>[10공수1-02-02]</strong> 이차방정식과 이차함수의 관계, 제한된 범위의 최대·최소</li>
+                          <li><strong>[10공수1-02-03]</strong> 여러 가지 방정식과 부등식 (연립부등식 정수 조건)</li>
+                          <li><strong>[10공수1-03-01]</strong> 경우의 수 (순열과 조합, 분할과 분배)</li>
+                          <li><strong>[10공수1-04-01]</strong> 행렬과 그 연산 (2×2 행렬의 곱셈과 성분 추론)</li>
+                        </ul>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold text-[10px]">공통 과목</span>
+                          <h3 className="font-extrabold text-slate-900 text-sm">공통수학2 [10공수2]</h3>
+                        </div>
+                        <ul className="space-y-2 text-slate-700">
+                          <li><strong>[10공수2-01-01]</strong> 평면좌표, 선분의 내분과 외분, 피타고라스 정리</li>
+                          <li><strong>[10공수2-01-02]</strong> 직선의 방정식과 점과 직선 사이의 거리 공식</li>
+                          <li><strong>[10공수2-01-03]</strong> 원의 방정식과 원과 직선의 위치 관계, 접선</li>
+                          <li><strong>[10공수2-01-04]</strong> 도형의 이동 (평행이동 및 직선 y=x에 대한 대칭이동)</li>
+                          <li><strong>[10공수2-02-01]</strong> 집합의 연산과 원소의 개수, 부분집합 추론</li>
+                          <li><strong>[10공수2-03-01]</strong> 함수의 정의, 일대일함수, 합성함수와 역함수</li>
+                          <li><strong>[10공수2-03-02]</strong> 유리함수와 무리함수의 그래프와 점근선</li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* 대수 & 미적분Ⅰ */}
+                    <div className="space-y-4">
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">일반 선택</span>
+                          <h3 className="font-extrabold text-slate-900 text-sm">대수 [12대수]</h3>
+                        </div>
+                        <ul className="space-y-2 text-slate-700">
+                          <li><strong>[12대수01-01]</strong> 거듭제곱과 거듭제곱근의 뜻과 실수인 것의 개수</li>
+                          <li><strong>[12대수01-02]</strong> 지수법칙의 확장 (유리수 지수와 부정방정식)</li>
+                          <li><strong>[12대수01-03]</strong> 로그의 정의와 밑변환 공식 및 성질</li>
+                          <li><strong>[12대수01-04]</strong> 지수함수와 로그함수의 역함수 관계</li>
+                          <li><strong>[12대수01-05]</strong> 지수·로그함수의 그래프와 평행이동, 점근선</li>
+                          <li><strong>[12대수01-06]</strong> 지수·로그 방정식과 부등식의 풀이</li>
+                          <li><strong>[12대수02-01]</strong> 삼각함수(사인·코사인·탄젠트)의 정의와 주기, 대칭성</li>
+                          <li><strong>[12대수02-02]</strong> 삼각함수의 각 변환 공식과 항등식 (sin²θ+cos²θ=1)</li>
+                          <li><strong>[12대수02-03]</strong> 사인법칙과 코사인법칙의 기하학적 활용과 삼각형 넓이</li>
+                          <li><strong>[12대수03-01]</strong> 수열의 뜻과 항의 추론</li>
+                          <li><strong>[12대수03-02]</strong> 등차수열과 등비수열의 일반항 및 합</li>
+                          <li><strong>[12대수03-04]</strong> 수열의 합 기호(∑)의 성질과 여러 가지 수열의 합</li>
+                          <li><strong>[12대수03-06]</strong> 수열의 귀납적 정의와 조건 분기 점화식</li>
+                        </ul>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/60">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">일반 선택</span>
+                          <h3 className="font-extrabold text-slate-900 text-sm">미적분Ⅰ [12미적Ⅰ]</h3>
+                        </div>
+                        <ul className="space-y-2 text-slate-700">
+                          <li><strong>[12미적Ⅰ-01-01]</strong> 함수의 수렴과 발산, 부정형(0/0꼴) 극한값 계산</li>
+                          <li><strong>[12미적Ⅰ-01-03]</strong> 함수의 연속과 불연속점의 판정 및 극한 조건 연립</li>
+                          <li><strong>[12미적Ⅰ-02-02]</strong> 미분계수의 기하학적 의미와 절댓값 함수의 미분가능성</li>
+                          <li><strong>[12미적Ⅰ-02-04]</strong> 접선의 방정식과 접점에서의 기울기</li>
+                          <li><strong>[12미적Ⅰ-02-07]</strong> 함수의 증가·감소 및 극대·극소 판정</li>
+                          <li><strong>[12미적Ⅰ-02-08]</strong> 삼차함수 그래프의 개형과 비율 관계 (2:1 / 1:1:1)</li>
+                          <li><strong>[12미적Ⅰ-02-09]</strong> 방정식과 부등식에 대한 미분의 활용 (실근 개수 함수)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500 no-print">
+            <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="font-medium">
+                2026 인공지능기초 고2 수학 모의고사 오답 개념진단 클리닉 수행평가
+              </div>
+              <div className="text-slate-400">
+                교육부 고시 제2022-33호 수학과 교육과정 성취기준 1:1 진단 엔진
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    }
+
+    // Render React App
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+
+</html>
